@@ -1,7 +1,23 @@
 import { useState, useMemo } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { formatPrice, formatDateTime, cn, getSignalBgClass } from '../lib/utils';
-import type { PivotData } from '../../../shared/types';
+
+interface PivotData {
+  datetime: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  rsi: number | null;
+  atr: number | null;
+  ama: number | null;
+  upper: number | null;
+  lower: number | null;
+  pivotHigh: boolean;
+  pivotLow: boolean;
+  signal: 'Buy' | 'Sell' | 'Hold';
+}
 
 interface DataTableProps {
   data: PivotData[];
@@ -18,9 +34,13 @@ export function DataTable({ data, isLoading, currency = 'USD' }: DataTableProps)
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  // Safely ensure data is an array
+  const safeData = Array.isArray(data) ? data : [];
+
   // Sort data
   const sortedData = useMemo(() => {
-    return [...data].sort((a, b) => {
+    if (safeData.length === 0) return [];
+    return [...safeData].sort((a, b) => {
       let comparison = 0;
 
       switch (sortField) {
@@ -50,7 +70,7 @@ export function DataTable({ data, isLoading, currency = 'USD' }: DataTableProps)
 
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [data, sortField, sortDirection]);
+  }, [safeData, sortField, sortDirection]);
 
   // Paginate data
   const totalPages = Math.ceil(sortedData.length / rowsPerPage);
@@ -77,7 +97,7 @@ export function DataTable({ data, isLoading, currency = 'USD' }: DataTableProps)
     );
   };
 
-  if (isLoading && data.length === 0) {
+  if (isLoading && safeData.length === 0) {
     return (
       <div className="h-full flex flex-col bg-slate-900/50">
         <div className="p-3 border-b border-slate-800">
