@@ -40,9 +40,12 @@ interface AnalysisPanelProps {
 }
 
 export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPanelProps) {
+  // Safely ensure data is an array
+  const safeData = Array.isArray(data) ? data : [];
+
   // Get latest data point safely
-  const latestData = data && data.length > 0
-    ? [...data].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime())[0]
+  const latestData = safeData.length > 0
+    ? [...safeData].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime())[0]
     : null;
 
   const rsiValue = latestData?.rsi;

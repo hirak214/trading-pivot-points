@@ -43,9 +43,13 @@ export function Watchlist({ onSelectTicker, selectedTicker }: WatchlistProps) {
               </div>
             ))}
           </div>
+        ) : !watchlistData || watchlistData.length === 0 ? (
+          <div className="p-4 text-center text-slate-500">
+            <p>No items in watchlist</p>
+          </div>
         ) : (
           <div className="space-y-1">
-            {watchlistData?.map((item) => (
+            {watchlistData.map((item) => (
               <button
                 key={item.ticker}
                 onClick={() => onSelectTicker(item.ticker)}

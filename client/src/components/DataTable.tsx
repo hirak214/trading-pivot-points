@@ -313,8 +313,14 @@ export function DataTable({ data, isLoading, currency = 'USD' }: DataTableProps)
       {/* Pagination */}
       <div className="flex items-center justify-between p-3 border-t border-slate-800">
         <div className="text-sm text-slate-400">
-          Showing {(currentPage - 1) * rowsPerPage + 1} to{' '}
-          {Math.min(currentPage * rowsPerPage, sortedData.length)} of {sortedData.length} entries
+          {sortedData.length === 0 ? (
+            'No entries'
+          ) : (
+            <>
+              Showing {(currentPage - 1) * rowsPerPage + 1} to{' '}
+              {Math.min(currentPage * rowsPerPage, sortedData.length)} of {sortedData.length} entries
+            </>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
