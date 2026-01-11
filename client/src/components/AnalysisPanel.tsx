@@ -1,6 +1,31 @@
-import { Bell, TrendingUp, TrendingDown, Activity, Clock, AlertTriangle } from 'lucide-react';
+import { Bell, TrendingUp, TrendingDown, Activity, Clock } from 'lucide-react';
 import { formatPrice, formatDateTime, cn, getSignalBgClass, getRSIInterpretation } from '../lib/utils';
-import type { PivotData, StockInfo } from '../../../shared/types';
+
+interface PivotData {
+  datetime: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  rsi: number | null;
+  atr: number | null;
+  ama: number | null;
+  upper: number | null;
+  lower: number | null;
+  pivotHigh: boolean;
+  pivotLow: boolean;
+  signal: 'Buy' | 'Sell' | 'Hold';
+}
+
+interface StockInfo {
+  symbol: string;
+  shortName: string;
+  longName: string;
+  currency: string;
+  exchange: string;
+  regularMarketPrice: number;
+}
 
 interface AnalysisPanelProps {
   data: PivotData[];
@@ -15,13 +40,14 @@ interface AnalysisPanelProps {
 }
 
 export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPanelProps) {
-  // Get latest data point
-  const latestData = data.length > 0
+  // Get latest data point safely
+  const latestData = data && data.length > 0
     ? [...data].sort((a, b) => new Date(b.datetime).getTime() - new Date(a.datetime).getTime())[0]
     : null;
 
-  const rsiInterpretation = latestData?.rsi !== null && latestData?.rsi !== undefined
-    ? getRSIInterpretation(latestData.rsi)
+  const rsiValue = latestData?.rsi;
+  const rsiInterpretation = rsiValue != null
+    ? getRSIInterpretation(rsiValue)
     : { text: 'N/A', color: 'text-slate-400' };
 
   if (isLoading && !latestData) {
@@ -40,6 +66,11 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
       </div>
     );
   }
+
+  // Safe access to upper and lower bounds
+  const upperBound = latestData?.upper;
+  const lowerBound = latestData?.lower;
+  const hasValidBounds = upperBound != null && lowerBound != null;
 
   return (
     <div className="h-full flex flex-col overflow-auto">
@@ -127,7 +158,7 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
         )}
 
         {/* RSI Indicator */}
-        {latestData?.rsi !== null && latestData?.rsi !== undefined && (
+        {rsiValue != null && (
           <div className="card p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -148,7 +179,7 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
               {/* RSI marker */}
               <div
                 className="absolute top-0 bottom-0 w-1 bg-white rounded-full shadow-lg transition-all duration-300"
-                style={{ left: `${latestData.rsi}%` }}
+                style={{ left: `${Math.min(100, Math.max(0, rsiValue))}%` }}
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-slate-500">
@@ -159,13 +190,13 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
               <span>100</span>
             </div>
             <div className="text-center mt-2">
-              <span className="text-2xl font-bold text-slate-100">{latestData.rsi.toFixed(2)}</span>
+              <span className="text-2xl font-bold text-slate-100">{rsiValue.toFixed(2)}</span>
             </div>
           </div>
         )}
 
         {/* ATR Indicator */}
-        {latestData?.atr !== null && latestData?.atr !== undefined && (
+        {latestData?.atr != null && (
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-blue-400" />
@@ -179,7 +210,7 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
         )}
 
         {/* Trendline Bounds */}
-        {latestData?.upper !== null && latestData?.lower !== null && (
+        {hasValidBounds && latestData && (
           <div className="card p-4">
             <div className="flex items-center gap-2 mb-3">
               <Activity className="w-4 h-4 text-blue-400" />
@@ -192,7 +223,7 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
                   Upper Bound
                 </span>
                 <span className="font-mono text-orange-400">
-                  {formatPrice(latestData.upper, stockInfo?.currency)}
+                  {formatPrice(upperBound, stockInfo?.currency)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -201,7 +232,7 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
                   Lower Bound
                 </span>
                 <span className="font-mono text-blue-400">
-                  {formatPrice(latestData.lower, stockInfo?.currency)}
+                  {formatPrice(lowerBound, stockInfo?.currency)}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-slate-700">
@@ -211,13 +242,13 @@ export function AnalysisPanel({ data, stockInfo, signal, isLoading }: AnalysisPa
                 </span>
               </div>
               <div className="text-xs text-slate-500">
-                {latestData.close > latestData.upper! && (
+                {latestData.close > upperBound && (
                   <span className="text-emerald-400">Price is above upper bound (Bullish)</span>
                 )}
-                {latestData.close < latestData.lower! && (
+                {latestData.close < lowerBound && (
                   <span className="text-red-400">Price is below lower bound (Bearish)</span>
                 )}
-                {latestData.close >= latestData.lower! && latestData.close <= latestData.upper! && (
+                {latestData.close >= lowerBound && latestData.close <= upperBound && (
                   <span className="text-yellow-400">Price is within bounds (Consolidating)</span>
                 )}
               </div>
