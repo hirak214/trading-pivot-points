@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initTRPC } from '@trpc/server';
-import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import superjson from 'superjson';
 import { z } from 'zod';
 import yahooFinance from 'yahoo-finance2';
@@ -56,8 +55,8 @@ async function getHistoricalData(ticker: string, period: Period = '5d', interval
   });
   if (!result?.quotes?.length) throw new Error(`No data for ${ticker}`);
   return result.quotes
-    .filter((q) => q.open != null && q.high != null && q.low != null && q.close != null)
-    .map((q) => ({
+    .filter((q: any) => q.open != null && q.high != null && q.low != null && q.close != null)
+    .map((q: any) => ({
       datetime: new Date(q.date),
       open: q.open!, high: q.high!, low: q.low!, close: q.close!,
       volume: q.volume ?? 0,
@@ -276,16 +275,110 @@ const appRouter = t.router({
   }),
 });
 
-// ============ HANDLER ============
-const trpcHandler = createExpressMiddleware({
-  router: appRouter,
-  createContext: () => ({}),
-});
+export type AppRouter = typeof appRouter;
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+// ============ VERCEL HANDLER ============
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  return trpcHandler(req as any, res as any);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  try {
+    // Extract the path from the URL
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+    // Path is like /api/trpc/stock.getPivotAnalysis
+    const trpcPath = pathParts.slice(2).join('.'); // Remove 'api' and 'trpc'
+
+    // Get input from query params
+    const input = req.query.input;
+    let parsedInput: any = {};
+
+    if (input) {
+      try {
+        const decoded = typeof input === 'string' ? JSON.parse(input) : input;
+        // Handle batched requests
+        if (decoded['0']?.json) {
+          parsedInput = decoded['0'].json;
+        } else {
+          parsedInput = decoded;
+        }
+      } catch (e) {
+        parsedInput = {};
+      }
+    }
+
+    // Route to the appropriate procedure
+    const caller = t.createCallerFactory(appRouter)({});
+    let result: any;
+
+    // Parse the procedure path (e.g., 'stock.getPivotAnalysis')
+    const [namespace, procedure] = trpcPath.split('.');
+
+    if (namespace === 'stock') {
+      if (procedure === 'getPivotAnalysis') {
+        result = await caller.stock.getPivotAnalysis(parsedInput);
+      } else if (procedure === 'getHistoricalData') {
+        result = await caller.stock.getHistoricalData(parsedInput);
+      } else if (procedure === 'getStockInfo') {
+        result = await caller.stock.getStockInfo(parsedInput);
+      }
+    } else if (namespace === 'watchlist') {
+      if (procedure === 'getAll') {
+        result = await caller.watchlist.getAll();
+      } else if (procedure === 'add') {
+        result = await caller.watchlist.add(parsedInput);
+      } else if (procedure === 'remove') {
+        result = await caller.watchlist.remove(parsedInput);
+      }
+    } else if (namespace === 'alerts') {
+      if (procedure === 'getActive') {
+        result = await caller.alerts.getActive();
+      } else if (procedure === 'create') {
+        result = await caller.alerts.create(parsedInput);
+      } else if (procedure === 'dismiss') {
+        result = await caller.alerts.dismiss(parsedInput);
+      } else if (procedure === 'delete') {
+        result = await caller.alerts.delete(parsedInput);
+      }
+    } else if (namespace === 'favorites') {
+      if (procedure === 'getAll') {
+        result = await caller.favorites.getAll();
+      } else if (procedure === 'add') {
+        result = await caller.favorites.add(parsedInput);
+      } else if (procedure === 'remove') {
+        result = await caller.favorites.remove(parsedInput);
+      }
+    } else if (namespace === 'searchHistory') {
+      if (procedure === 'getRecent') {
+        result = await caller.searchHistory.getRecent();
+      } else if (procedure === 'add') {
+        result = await caller.searchHistory.add(parsedInput);
+      } else if (procedure === 'clear') {
+        result = await caller.searchHistory.clear();
+      }
+    }
+
+    if (result === undefined) {
+      return res.status(404).json([{ error: { message: `Procedure not found: ${trpcPath}` } }]);
+    }
+
+    // Return in tRPC batch format
+    const response = [{ result: { data: superjson.serialize(result) } }];
+    return res.status(200).json(response);
+
+  } catch (error: any) {
+    console.error('tRPC Error:', error);
+    return res.status(500).json([{
+      error: {
+        message: error.message || 'Internal server error',
+        code: 'INTERNAL_SERVER_ERROR'
+      }
+    }]);
+  }
 }
