@@ -277,6 +277,36 @@ const appRouter = t.router({
 
 export type AppRouter = typeof appRouter;
 
+// Helper to call a procedure by path
+async function callProcedure(caller: any, path: string, input: any): Promise<any> {
+  const [namespace, procedure] = path.split('.');
+
+  if (namespace === 'stock') {
+    if (procedure === 'getPivotAnalysis') return caller.stock.getPivotAnalysis(input);
+    if (procedure === 'getHistoricalData') return caller.stock.getHistoricalData(input);
+    if (procedure === 'getStockInfo') return caller.stock.getStockInfo(input);
+  } else if (namespace === 'watchlist') {
+    if (procedure === 'getAll') return caller.watchlist.getAll();
+    if (procedure === 'add') return caller.watchlist.add(input);
+    if (procedure === 'remove') return caller.watchlist.remove(input);
+  } else if (namespace === 'alerts') {
+    if (procedure === 'getActive') return caller.alerts.getActive();
+    if (procedure === 'create') return caller.alerts.create(input);
+    if (procedure === 'dismiss') return caller.alerts.dismiss(input);
+    if (procedure === 'delete') return caller.alerts.delete(input);
+  } else if (namespace === 'favorites') {
+    if (procedure === 'getAll') return caller.favorites.getAll();
+    if (procedure === 'add') return caller.favorites.add(input);
+    if (procedure === 'remove') return caller.favorites.remove(input);
+  } else if (namespace === 'searchHistory') {
+    if (procedure === 'getRecent') return caller.searchHistory.getRecent();
+    if (procedure === 'add') return caller.searchHistory.add(input);
+    if (procedure === 'clear') return caller.searchHistory.clear();
+  }
+
+  throw new Error(`Procedure not found: ${path}`);
+}
+
 // ============ VERCEL HANDLER ============
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -292,85 +322,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Extract the path from the URL
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const pathParts = url.pathname.split('/').filter(Boolean);
-    // Path is like /api/trpc/stock.getPivotAnalysis
-    const trpcPath = pathParts.slice(2).join('.'); // Remove 'api' and 'trpc'
+    // Path is like /api/trpc/stock.getPivotAnalysis or /api/trpc/watchlist.getAll,stock.getPivotAnalysis
+    const trpcPath = pathParts.slice(2).join('/'); // Get everything after /api/trpc/
+
+    // Handle batched requests (comma-separated procedures)
+    const procedures = trpcPath.split(',');
 
     // Get input from query params
     const input = req.query.input;
-    let parsedInput: any = {};
+    let parsedInputs: any = {};
 
     if (input) {
       try {
-        const decoded = typeof input === 'string' ? JSON.parse(input) : input;
-        // Handle batched requests
-        if (decoded['0']?.json) {
-          parsedInput = decoded['0'].json;
-        } else {
-          parsedInput = decoded;
-        }
+        parsedInputs = typeof input === 'string' ? JSON.parse(input) : input;
       } catch (e) {
-        parsedInput = {};
+        parsedInputs = {};
       }
     }
 
-    // Route to the appropriate procedure
+    // Route to the appropriate procedures
     const caller = t.createCallerFactory(appRouter)({});
-    let result: any;
+    const results: any[] = [];
 
-    // Parse the procedure path (e.g., 'stock.getPivotAnalysis')
-    const [namespace, procedure] = trpcPath.split('.');
+    for (let i = 0; i < procedures.length; i++) {
+      const procPath = procedures[i];
+      const procInput = parsedInputs[String(i)]?.json;
 
-    if (namespace === 'stock') {
-      if (procedure === 'getPivotAnalysis') {
-        result = await caller.stock.getPivotAnalysis(parsedInput);
-      } else if (procedure === 'getHistoricalData') {
-        result = await caller.stock.getHistoricalData(parsedInput);
-      } else if (procedure === 'getStockInfo') {
-        result = await caller.stock.getStockInfo(parsedInput);
-      }
-    } else if (namespace === 'watchlist') {
-      if (procedure === 'getAll') {
-        result = await caller.watchlist.getAll();
-      } else if (procedure === 'add') {
-        result = await caller.watchlist.add(parsedInput);
-      } else if (procedure === 'remove') {
-        result = await caller.watchlist.remove(parsedInput);
-      }
-    } else if (namespace === 'alerts') {
-      if (procedure === 'getActive') {
-        result = await caller.alerts.getActive();
-      } else if (procedure === 'create') {
-        result = await caller.alerts.create(parsedInput);
-      } else if (procedure === 'dismiss') {
-        result = await caller.alerts.dismiss(parsedInput);
-      } else if (procedure === 'delete') {
-        result = await caller.alerts.delete(parsedInput);
-      }
-    } else if (namespace === 'favorites') {
-      if (procedure === 'getAll') {
-        result = await caller.favorites.getAll();
-      } else if (procedure === 'add') {
-        result = await caller.favorites.add(parsedInput);
-      } else if (procedure === 'remove') {
-        result = await caller.favorites.remove(parsedInput);
-      }
-    } else if (namespace === 'searchHistory') {
-      if (procedure === 'getRecent') {
-        result = await caller.searchHistory.getRecent();
-      } else if (procedure === 'add') {
-        result = await caller.searchHistory.add(parsedInput);
-      } else if (procedure === 'clear') {
-        result = await caller.searchHistory.clear();
+      try {
+        const result = await callProcedure(caller, procPath, procInput);
+        results.push({ result: { data: superjson.serialize(result) } });
+      } catch (error: any) {
+        results.push({
+          error: {
+            message: error.message || 'Procedure error',
+            code: 'INTERNAL_SERVER_ERROR'
+          }
+        });
       }
     }
 
-    if (result === undefined) {
-      return res.status(404).json([{ error: { message: `Procedure not found: ${trpcPath}` } }]);
-    }
-
-    // Return in tRPC batch format
-    const response = [{ result: { data: superjson.serialize(result) } }];
-    return res.status(200).json(response);
+    return res.status(200).json(results);
 
   } catch (error: any) {
     console.error('tRPC Error:', error);
