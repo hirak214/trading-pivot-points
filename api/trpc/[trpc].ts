@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter } from '../../server/trpc/router';
-import { createVercelContext } from '../../server/trpc/context';
+import { appRouter, createContext } from '../_lib/router';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle CORS preflight
@@ -22,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Convert headers to a format suitable for Request constructor
     const headers = new Headers();
     for (const [key, value] of Object.entries(req.headers)) {
-      if (value !== undefined) {
+      if (value !== undefined && value !== null) {
         if (Array.isArray(value)) {
           value.forEach((v) => headers.append(key, v));
         } else {
@@ -40,12 +39,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : undefined,
     });
 
-    // Use tRPC's fetchRequestHandler with the existing appRouter
+    // Use tRPC's fetchRequestHandler with the self-contained appRouter
     const response = await fetchRequestHandler({
       endpoint: '/api/trpc',
       req: webRequest,
       router: appRouter,
-      createContext: ({ req }) => createVercelContext(req),
+      createContext: ({ req }) => createContext(req),
     });
 
     // Set response status
