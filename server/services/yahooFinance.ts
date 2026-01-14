@@ -90,10 +90,12 @@ export async function searchSymbols(query: string): Promise<{ symbol: string; na
     });
 
     return (results.quotes ?? [])
-      .filter((q) => q.symbol && q.shortname)
+      .filter((q): q is typeof q & { symbol: string; shortname?: string; exchange?: string } =>
+        'symbol' in q && typeof q.symbol === 'string' && q.symbol.length > 0
+      )
       .map((q) => ({
-        symbol: q.symbol!,
-        name: q.shortname ?? q.symbol!,
+        symbol: q.symbol,
+        name: q.shortname ?? q.symbol,
         exchange: q.exchange ?? '',
       }));
   } catch (error) {
