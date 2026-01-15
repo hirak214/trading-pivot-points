@@ -8,7 +8,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   // Test loading router module
   try {
-    const routerModule = await import('./_lib/router');
+    const routerModule = await import('./lib/router');
     results.routerLoaded = true;
     results.hasAppRouter = 'appRouter' in routerModule;
     results.hasCreateContext = 'createContext' in routerModule;
@@ -20,7 +20,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   // Test loading types module
   try {
-    const typesModule = await import('./_lib/types');
+    const typesModule = await import('./lib/types');
     results.typesLoaded = true;
     results.hasStockQuerySchema = 'stockQuerySchema' in typesModule;
   } catch (error: unknown) {
@@ -30,7 +30,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   // Test loading yahooFinance module
   try {
-    const yahooModule = await import('./_lib/yahooFinance');
+    const yahooModule = await import('./lib/yahooFinance');
     results.yahooLoaded = true;
     results.hasGetHistoricalData = 'getHistoricalData' in yahooModule;
   } catch (error: unknown) {
@@ -40,7 +40,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
 
   // Test loading pivotCalculator module
   try {
-    const pivotModule = await import('./_lib/pivotCalculator');
+    const pivotModule = await import('./lib/pivotCalculator');
     results.pivotLoaded = true;
     results.hasCalculatePivotData = 'calculatePivotData' in pivotModule;
   } catch (error: unknown) {

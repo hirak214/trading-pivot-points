@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter, createContext } from '../_lib/router';
+import { appRouter, createContext } from '../lib/router';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Handle CORS preflight
